@@ -192,7 +192,7 @@ export class AuthTokenService implements CanActivate {
 
   signInOAuth(oAuthType: string) {
     const oAuthPath: string = this.getOAuthPath(oAuthType);
-    const callbackUrl = `${window.location.origin}/${this.atOptions.oAuthCallbackPath}`;
+    const callbackUrl = '${window.location.origin}/${this.atOptions.oAuthCallbackPath}';
     const oAuthWindowType: string = this.atOptions.oAuthWindowType;
     const authUrl: string = this.getOAuthUrl(oAuthPath, callbackUrl, oAuthWindowType);
 
@@ -202,20 +202,20 @@ export class AuthTokenService implements CanActivate {
 
       if (oAuthWindowOptions) {
         for (const key in oAuthWindowOptions) {
-          windowOptions += `,${key}=${oAuthWindowOptions[key]}`;
+          windowOptions += ',${key}=${oAuthWindowOptions[key]}';
         }
       }
 
       const popup = window.open(
         authUrl,
         '_blank',
-        `closebuttoncaption=Cancel${windowOptions}`
+        'closebuttoncaption=Cancel${windowOptions}'
       );
       return this.requestCredentialsViaPostMessage(popup);
     } else if (oAuthWindowType === 'sameWindow') {
       window.location.href = authUrl;
     } else {
-      throw `Unsupported oAuthWindowType "${oAuthWindowType}"`;
+      throw 'Unsupported oAuthWindowType "${oAuthWindowType}"';
     }
   }
 
@@ -595,7 +595,7 @@ export class AuthTokenService implements CanActivate {
     oAuthPath = this.atOptions.oAuthPaths[oAuthType];
 
     if (oAuthPath == null) {
-      oAuthPath = `/auth/${oAuthType}`;
+      oAuthPath = '/auth/${oAuthType}';
     }
 
     return oAuthPath;
@@ -604,12 +604,12 @@ export class AuthTokenService implements CanActivate {
   private getOAuthUrl(oAuthPath: string, callbackUrl: string, windowType: string): string {
     let url: string;
 
-    url =   `${this.atOptions.oAuthBase}/${oAuthPath}`;
-    url +=  `?omniauth_window_type=${windowType}`;
-    url +=  `&auth_origin_url=${encodeURIComponent(callbackUrl)}`;
+    url =   '${this.atOptions.oAuthBase}/${oAuthPath}';
+    url +=  '?omniauth_window_type=${windowType}';
+    url +=  '&auth_origin_url=${encodeURIComponent(callbackUrl)}';
 
     if (this.atCurrentUserType != null) {
-      url += `&resource_class=${this.atCurrentUserType.name}`;
+      url += '&resource_class=${this.atCurrentUserType.name}';
     }
 
     return url;
