@@ -1,5 +1,10 @@
 {
   "compileOnSave": false,
+  "angularCompilerOptions": {
+    "paths": {
+      "@twimco/ngx-token-auth": [ "public_api.ts" ]
+    }
+  },
   "compilerOptions": {
     "outDir": "./dist/out-tsc",
     "sourceMap": true,
