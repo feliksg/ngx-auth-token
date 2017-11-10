@@ -1,6 +1,10 @@
 {
-  "$schema": "./node_modules/ng-packagr/ng-package.schema.json",
-  "lib": {
-    "entryFile": "index.ts"
+  "$schema": "./node_modules/ng-packagr/package.schema.json",
+  "name": "@twimco/ngx-token-auth",
+  "version": "0.0.3",
+  "ngPackage": {
+    "lib": {
+      "entryFile": "public_api.ts"
+    }
   }
 }
