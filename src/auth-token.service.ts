@@ -1,5 +1,5 @@
-import { Inject, Injectable, Optional } from '@angular/core';
-import { ActivatedRoute, Router, CanActivate } from '@angular/router';
+import { Injectable, Optional } from '@angular/core';
+import { ActivatedRoute, Router, CanActivate, CanActivateChild } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 
 import { Observable } from 'rxjs/Observable';
@@ -8,6 +8,7 @@ import 'rxjs/add/observable/interval';
 import 'rxjs/add/observable/fromEvent';
 import 'rxjs/add/operator/pluck';
 import 'rxjs/add/operator/filter';
+import 'rxjs/add/operator/do';
 
 import {
   SignInData,
@@ -19,14 +20,13 @@ import {
   UserData,
   AuthData,
 
-  AuthTokenOptions,
+  AuthTokenOpts,
   RequestOptions
 } from './auth-token.model';
-import { AUTH_TOKEN_OPTIONS } from './auth-token.options';
 
 @Injectable()
-export class AuthTokenService implements CanActivate {
-  defaultOptions: AuthTokenOptions = {
+export class AuthTokenService implements CanActivate, CanActivateChild {
+  defaultOptions: AuthTokenOpts = {
     apiPath:                    null,
     apiBase:                    null,
 
@@ -95,21 +95,16 @@ export class AuthTokenService implements CanActivate {
     return new HttpHeaders;
   }
 
-  private atOptions: AuthTokenOptions;
+  private atOptions: AuthTokenOpts;
   private atCurrentUserType: UserType;
   private atCurrentAuthData: AuthData;
   private atCurrentUserData: UserData;
 
   constructor(
-    @Inject(HttpClient) private http: HttpClient,
-    @Inject(AUTH_TOKEN_OPTIONS) config: AuthTokenOptions,
-    @Optional() @Inject(ActivatedRoute) private activatedRoute: ActivatedRoute,
-    @Optional() @Inject(Router) private router: Router
-  ) {
-    if (config) {
-      this.atOptions = (<any>Object).assign(this.defaultOptions, config);
-    }
-  }
+    private http: HttpClient,
+    @Optional() private activatedRoute: ActivatedRoute,
+    @Optional() private router: Router
+  ) {}
 
   userSignedIn(): boolean {
     return !!this.atCurrentAuthData;
@@ -119,7 +114,7 @@ export class AuthTokenService implements CanActivate {
     if (this.userSignedIn()) {
       return true;
     } else {
-      // Store current location in storage (usefull for redirection after signing in)
+      // Store current location in storage (useful for redirection after signing in)
       if (this.atOptions.signInStoredUrlStorageKey) {
         localStorage.setItem(
           this.atOptions.signInStoredUrlStorageKey,
@@ -136,8 +131,12 @@ export class AuthTokenService implements CanActivate {
     }
   }
 
+  canActivateChild(): boolean {
+    return this.canActivate();
+  }
+
   // Inital configuration
-  init(options?: AuthTokenOptions) {
+  init(options?: AuthTokenOpts) {
     this.atOptions = (<any>Object).assign(this.defaultOptions, options);
     this.tryLoadAuthData();
   }
@@ -162,7 +161,7 @@ export class AuthTokenService implements CanActivate {
 
     registerData.confirm_success_url    = this.atOptions.registerAccountCallback;
 
-    return this.post(this.getUserPath() + this.atOptions.registerAccountPath, JSON.stringify(registerData));
+    return this.post(this.getUserPath() + this.atOptions.registerAccountPath, registerData);
   }
 
   // Delete Account
@@ -178,21 +177,24 @@ export class AuthTokenService implements CanActivate {
       this.atCurrentUserType = this.getUserTypeByName(signInData.userType);
     }
 
-    const body = JSON.stringify({
+    const body = {
       email:      signInData.email,
       password:   signInData.password
-    });
+    };
 
     const observ = this.post(this.getUserPath() + this.atOptions.signInPath, body);
 
-    observ.subscribe(res => this.atCurrentUserData = res.json().data, _error => null);
+    observ.subscribe(
+      res => this.atCurrentUserData = res.body,
+      err => null
+    );
 
     return observ;
   }
 
   signInOAuth(oAuthType: string) {
     const oAuthPath: string = this.getOAuthPath(oAuthType);
-    const callbackUrl = '${window.location.origin}/${this.atOptions.oAuthCallbackPath}';
+    const callbackUrl = `${window.location.origin}/${this.atOptions.oAuthCallbackPath}`;
     const oAuthWindowType: string = this.atOptions.oAuthWindowType;
     const authUrl: string = this.getOAuthUrl(oAuthPath, callbackUrl, oAuthWindowType);
 
@@ -202,20 +204,20 @@ export class AuthTokenService implements CanActivate {
 
       if (oAuthWindowOptions) {
         for (const key in oAuthWindowOptions) {
-          windowOptions += ',${key}=${oAuthWindowOptions[key]}';
+          windowOptions += `,${key}=${oAuthWindowOptions[key]}`;
         }
       }
 
       const popup = window.open(
         authUrl,
         '_blank',
-        'closebuttoncaption=Cancel${windowOptions}'
+        `closebuttoncaption=Cancel${windowOptions}`
       );
       return this.requestCredentialsViaPostMessage(popup);
     } else if (oAuthWindowType === 'sameWindow') {
       window.location.href = authUrl;
     } else {
-      throw 'Unsupported oAuthWindowType "${oAuthWindowType}"';
+      throw `Unsupported oAuthWindowType "${oAuthWindowType}"`;
     }
   }
 
@@ -227,30 +229,35 @@ export class AuthTokenService implements CanActivate {
   signOut(): Observable<Response> {
     const observ = this.delete(this.getUserPath() + this.atOptions.signOutPath);
 
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('client');
-    localStorage.removeItem('expiry');
-    localStorage.removeItem('tokenType');
-    localStorage.removeItem('uid');
+    observ.subscribe(
+      res => {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('client');
+        localStorage.removeItem('expiry');
+        localStorage.removeItem('tokenType');
+        localStorage.removeItem('uid');
 
-    this.atCurrentAuthData = null;
-    this.atCurrentUserType = null;
-    this.atCurrentUserData = null;
+        this.atCurrentAuthData = null;
+        this.atCurrentUserType = null;
+        this.atCurrentUserData = null;
+      }
+    );
 
     return observ;
   }
 
   // Validate token request
   validateToken(): Observable<Response> {
-    const observ = this.get(this.getUserPath() + this.atOptions.validateTokenPath);
+    const observ = this.get(this.getUserPath() + this.atOptions.validateTokenPath)
 
     observ.subscribe(
-      res => this.atCurrentUserData = res.json().data,
+      res => this.atCurrentUserData = res.data,
       error => {
         if (error.status === 401 && this.atOptions.signOutFailedValidate) {
           this.signOut();
         }
-      });
+      }
+    );
 
     return observ;
   }
@@ -280,7 +287,7 @@ export class AuthTokenService implements CanActivate {
       args.reset_password_token = updatePasswordData.resetPasswordToken;
     }
 
-    const body = JSON.stringify(args);
+    const body = args;
     return this.put(this.getUserPath() + this.atOptions.updatePasswordPath, body);
   }
 
@@ -293,10 +300,10 @@ export class AuthTokenService implements CanActivate {
       this.atCurrentUserType = this.getUserTypeByName(resetPasswordData.userType);
     }
 
-    const body = JSON.stringify({
+    const body = {
       email:          resetPasswordData.email,
       redirect_url:   this.atOptions.resetPasswordCallback
-    });
+    };
 
     return this.post(this.getUserPath() + this.atOptions.resetPasswordPath, body);
   }
@@ -308,122 +315,59 @@ export class AuthTokenService implements CanActivate {
    */
 
   get(url: string, options?: RequestOptions): Observable<any> {
-    const response = this.http.get(this.getApiPath() + url, options).share();
-    this.handleResponse(response);
-    return response;
+    return this.http.get(this.getApiPath() + url, options).share();
   }
 
   post(url: string, body: any, options?: RequestOptions): Observable<any> {
-    const response = this.http.post(this.getApiPath() + url, body, options).share();
-    this.handleResponse(response);
-    return response;
+    return this.http.post(this.getApiPath() + url, body, options).share();
   }
 
   put(url: string, body: any, options?: RequestOptions): Observable<any> {
-    const response = this.http.put(this.getApiPath() + url, body, options).share();
-    this.handleResponse(response);
-    return response;
+    return this.http.put(this.getApiPath() + url, body, options).share();
   }
 
   delete(url: string, options?: RequestOptions): Observable<any> {
-    const response = this.http.delete(this.getApiPath() + url, options).share();
-    this.handleResponse(response);
-    return response;
+    return this.http.delete(this.getApiPath() + url, options).share();
   }
 
   patch(url: string, body: any, options?: RequestOptions): Observable<any> {
-    const response = this.http.patch(this.getApiPath() + url, body, options).share();
-    this.handleResponse(response);
-    return response;
+    return this.http.patch(this.getApiPath() + url, body, options).share();
   }
 
   head(url: string, options?: RequestOptions): Observable<any> {
-    const response = this.http.head(this.getApiPath() + url, options).share();
-    this.handleResponse(response);
-    return response;
+    return this.http.head(this.getApiPath() + url, options).share();
   }
 
   options(url: string, options?: RequestOptions): Observable<any> {
-    const response = this.http.options(this.getApiPath() + url, options).share();
-    this.handleResponse(response);
-    return response;
+    return this.http.options(this.getApiPath() + url, options).share();
   }
 
-  setCurrentAuthHeaders(): HttpHeaders {
+  getCurrentAuthHeaders(): HttpHeaders {
     // Get auth data from local storage
     this.getAuthDataFromStorage();
 
     // Get auth data from query params to override local storage data
-    this.getAuthDataFromParams();
+    if (this.activatedRoute) {
+      this.getAuthDataFromParams();
+    }
 
-    const headers: HttpHeaders = new HttpHeaders();
+    let headers: any = {};
 
     // Merge auth headers to request if set
     if (this.atCurrentAuthData != null) {
-      headers.append('access-token', this.atCurrentAuthData.accessToken);
-      headers.append('client', this.atCurrentAuthData.client);
-      headers.append('expiry', this.atCurrentAuthData.expiry);
-      headers.append('token-type', this.atCurrentAuthData.tokenType);
-      headers.append('uid', this.atCurrentAuthData.uid);
+      headers['access-token'] = this.atCurrentAuthData.accessToken;
+      headers['client'] = this.atCurrentAuthData.client;
+      headers['expiry'] = this.atCurrentAuthData.expiry;
+      headers['token-type'] = this.atCurrentAuthData.tokenType;
+      headers['uid'] = this.atCurrentAuthData.uid;
     }
 
     Object.keys(this.atOptions.globalOptions.headers).forEach(
-      (key) => headers.append(key, this.atOptions.globalOptions.headers[key])
+      (key) => headers[key] = this.atOptions.globalOptions.headers[key]
     );
 
-    return headers;
-  }
-
-  // // Construct and send Http request
-  // request(options: RequestOptionsArgs): Observable<Response> {
-  //
-  //     let baseRequestOptions: RequestOptions;
-  //     let baseHeaders:        { [key:string]: string; } = this.atOptions.globalOptions.headers;
-  //
-  //     // Get auth data from local storage
-  //     this.getAuthDataFromStorage();
-  //
-  //     // Merge auth headers to request if set
-  //     if (this.atCurrentAuthData != null) {
-  //         (<any>Object).assign(baseHeaders, {
-  //             'access-token': this.atCurrentAuthData.accessToken,
-  //             'client':       this.atCurrentAuthData.client,
-  //             'expiry':       this.atCurrentAuthData.expiry,
-  //             'token-type':   this.atCurrentAuthData.tokenType,
-  //             'uid':          this.atCurrentAuthData.uid
-  //         });
-  //     }
-  //
-  //     baseRequestOptions = new RequestOptions({
-  //         headers: new Headers(baseHeaders)
-  //     });
-  //
-  //     // Merge standard and custom RequestOptions
-  //     baseRequestOptions = baseRequestOptions.merge(options);
-  //
-  //     let response = this.http.request(new Request(baseRequestOptions)).share();
-  //     this.handleResponse(response);
-  //
-  //     return response;
-  // }
-  //
-  // private mergeRequestOptionsArgs(options: RequestOptionsArgs, addOptions?: RequestOptionsArgs): RequestOptionsArgs {
-  //
-  //     let returnOptions: RequestOptionsArgs = options;
-  //
-  //     if (options)
-  //         (<any>Object).assign(returnOptions, addOptions);
-  //
-  //     return returnOptions;
-  // }
-
-  // Check if response is complete and newer, then update storage
-  private handleResponse(request: Observable<any>): void {
-    request.subscribe(res => {
-      this.getAuthHeadersFromResponse(<any>res);
-    }, error => {
-      this.getAuthHeadersFromResponse(<any>error);
-    });
+    const httpHeaders: HttpHeaders = new HttpHeaders(headers);
+    return httpHeaders;
   }
 
   /**
@@ -453,8 +397,7 @@ export class AuthTokenService implements CanActivate {
   }
 
   // Parse Auth data from response
-  private getAuthHeadersFromResponse(data: any): void {
-    const headers = data.headers;
+  getAuthHeadersFromResponse(headers: HttpHeaders): void {
     const authData: AuthData = {
       accessToken:    headers.get('access-token'),
       client:         headers.get('client'),
@@ -604,12 +547,12 @@ export class AuthTokenService implements CanActivate {
   private getOAuthUrl(oAuthPath: string, callbackUrl: string, windowType: string): string {
     let url: string;
 
-    url =   '${this.atOptions.oAuthBase}/${oAuthPath}';
-    url +=  '?omniauth_window_type=${windowType}';
-    url +=  '&auth_origin_url=${encodeURIComponent(callbackUrl)}';
+    url =   `${this.atOptions.oAuthBase}/${oAuthPath}`;
+    url +=  `?omniauth_window_type=${windowType}`;
+    url +=  `&auth_origin_url=${encodeURIComponent(callbackUrl)}`;
 
     if (this.atCurrentUserType != null) {
-      url += '&resource_class=${this.atCurrentUserType.name}';
+      url += `&resource_class=${this.atCurrentUserType.name}`;
     }
 
     return url;

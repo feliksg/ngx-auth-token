@@ -17,7 +17,7 @@ export interface RegisterData {
 }
 
 export interface RegisterData {
-  [key:string]: string;
+  [key: string]: string;
 };
 
 export interface UpdatePasswordData {
@@ -61,10 +61,10 @@ export interface UserType {
 }
 
 export interface GlobalOptions {
-  headers?:       { [key: string]: string; };
+  headers?:       {[key: string]: string};
 }
 
-export interface AuthTokenOptions {
+export interface AuthTokenOpts {
   apiBase?:                   string;
   apiPath?:                   string;
 
@@ -88,10 +88,10 @@ export interface AuthTokenOptions {
   userTypes?:                 UserType[];
 
   oAuthBase?:                 string;
-  oAuthPaths?:                { [key: string]: string; };
+  oAuthPaths?:                {[key: string]: string};
   oAuthCallbackPath?:         string;
   oAuthWindowType?:           string;
-  oAuthWindowOptions?:        { [key: string]: string; };
+  oAuthWindowOptions?:        {[key: string]: string};
 
   globalOptions?:             GlobalOptions;
 }

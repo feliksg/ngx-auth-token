@@ -1,20 +1,36 @@
-import { Inject, Injectable } from '@angular/core';
-import { HttpEvent, HttpInterceptor, HttpHandler, HttpRequest } from '@angular/common/http';
+import { Injector, Injectable } from '@angular/core';
+import { HttpEvent, HttpInterceptor, HttpHandler, HttpRequest, HttpHeaders, HttpResponse } from '@angular/common/http';
 import { Observable } from 'rxjs/Observable';
 import { AuthTokenService } from './auth-token.service';
+import 'rxjs/add/operator/do';
 
 @Injectable()
 export class AuthTokenInterceptor implements HttpInterceptor {
-  constructor(public authTokenService: AuthTokenService ) {}
+  authTokenService: AuthTokenService;
+
+  constructor(private inj: Injector) {}
 
   intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
-    this.authTokenService.setCurrentAuthHeaders();
+    this.authTokenService = this.inj.get(AuthTokenService);
 
-    const authHeaders = this.authTokenService.currentAuthHeaders;
-    authHeaders.keys().forEach((key) => req.headers.append(key, authHeaders.get(key)));
+    const headers: any = {};
 
-    const authReq = req.clone({ headers: req.headers });
+    if (req.headers && req.headers.keys().length) {
+      req.headers.keys().forEach(key => { headers[key] = req.headers.get(key); });
+    }
 
-    return next.handle(authReq);
+    const authHeaders = this.authTokenService.getCurrentAuthHeaders();
+    if (authHeaders && authHeaders.keys().length) {
+      authHeaders.keys().forEach(key => { headers[key] = authHeaders.get(key); });
+    }
+
+    const httpHeaders: HttpHeaders = new HttpHeaders(headers);
+    const authReq = req.clone({ headers: httpHeaders });
+
+    return next.handle(authReq).do((event: HttpEvent<any>) => {
+      if (event instanceof HttpResponse) {
+        this.authTokenService.getAuthHeadersFromResponse(event.headers);
+      }
+    });
   }
 }
