@@ -9,7 +9,7 @@
     "experimentalDecorators": true,
     "target": "es5",
     "module": "es2015",
-    "scope": "@twimco",
+    // "scope": "@twimco",
     "typeRoots": [
       "node_modules/@types"
     ],
