@@ -2,13 +2,8 @@ import { Injectable, Optional } from '@angular/core';
 import { ActivatedRoute, Router, CanActivate, CanActivateChild } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 
-import { Observable } from 'rxjs/Observable';
-import 'rxjs/add/operator/share';
-import 'rxjs/add/observable/interval';
-import 'rxjs/add/observable/fromEvent';
-import 'rxjs/add/operator/pluck';
-import 'rxjs/add/operator/filter';
-import 'rxjs/add/operator/do';
+import { Observable, interval, fromEvent } from 'rxjs';
+import { pluck, filter } from 'rxjs/operators';
 
 import {
   SignInData,
@@ -315,31 +310,31 @@ export class AuthTokenService implements CanActivate, CanActivateChild {
    */
 
   get(url: string, options?: RequestOptions): Observable<any> {
-    return this.http.get(this.getApiPath() + url, options).share();
+    return this.http.get(this.getApiPath() + url, options);
   }
 
   post(url: string, body: any, options?: RequestOptions): Observable<any> {
-    return this.http.post(this.getApiPath() + url, body, options).share();
+    return this.http.post(this.getApiPath() + url, body, options);
   }
 
   put(url: string, body: any, options?: RequestOptions): Observable<any> {
-    return this.http.put(this.getApiPath() + url, body, options).share();
+    return this.http.put(this.getApiPath() + url, body, options);
   }
 
   delete(url: string, options?: RequestOptions): Observable<any> {
-    return this.http.delete(this.getApiPath() + url, options).share();
+    return this.http.delete(this.getApiPath() + url, options);
   }
 
   patch(url: string, body: any, options?: RequestOptions): Observable<any> {
-    return this.http.patch(this.getApiPath() + url, body, options).share();
+    return this.http.patch(this.getApiPath() + url, body, options);
   }
 
   head(url: string, options?: RequestOptions): Observable<any> {
-    return this.http.head(this.getApiPath() + url, options).share();
+    return this.http.head(this.getApiPath() + url, options);
   }
 
   options(url: string, options?: RequestOptions): Observable<any> {
-    return this.http.options(this.getApiPath() + url, options).share();
+    return this.http.options(this.getApiPath() + url, options);
   }
 
   getCurrentAuthHeaders(): HttpHeaders {
@@ -565,12 +560,14 @@ export class AuthTokenService implements CanActivate, CanActivateChild {
    */
 
   private requestCredentialsViaPostMessage(authWindow: any): Observable<any> {
-    const pollerObserv = Observable.interval(500);
+    const pollerObserv = interval(500);
 
-    const responseObserv = Observable.fromEvent(window, 'message').pluck('data')
-      .filter(this.oAuthWindowResponseFilter);
+    const responseObserv = fromEvent(window, 'message').pipe(
+      pluck('data'),
+      filter(this.oAuthWindowResponseFilter)
+    );
 
-    const responseSubscription = responseObserv.subscribe(
+    responseObserv.subscribe(
       this.getAuthDataFromPostMessage.bind(this)
     );
 
